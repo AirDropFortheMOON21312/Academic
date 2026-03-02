@@ -808,7 +808,7 @@ const App: React.FC = () => {
             activeUnit?.data ? (
               renderContent()
             ) : (
-              <div className="h-full flex flex-col items-center justify-center animate-fade-in">
+              <div className="min-h-full flex flex-col items-center justify-start md:justify-center py-10 animate-fade-in">
                  {errorState ? (
                     <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-red-100 text-center">
                         <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">

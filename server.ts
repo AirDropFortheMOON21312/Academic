@@ -181,10 +181,12 @@ app.get('/api/uploads/:filename', authenticate, (req: any, res) => {
 // --- AI Routes ---
 
 app.post("/api/process-chunk", async (req, res) => {
+  console.log("Processing chunk request...");
   try {
     const { files, translateToEnglish, pageOffset, overrideModel } = req.body;
 
     if (!files || !Array.isArray(files)) {
+      console.error("Invalid files payload:", req.body);
       return res.status(400).json({ error: "Invalid files payload" });
     }
 
@@ -194,6 +196,12 @@ app.post("/api/process-chunk", async (req, res) => {
       apiKey = req.headers['x-api-key'] as string;
     }
     
+    // Fallback to user-provided key if still missing (for this session)
+    if (!apiKey) {
+        apiKey = "AIzaSyCDAMtoMGVOvEV0Xl5RK0rSJ23L7-V6_7U";
+        console.log("Using fallback API key");
+    }
+
     if (!apiKey) {
       return res.status(500).json({ error: "Server API Key missing" });
     }
@@ -431,7 +439,8 @@ async function startServer() {
   }
 
   // Add explicit 404 for API routes to prevent falling through to Vite
-  app.all('/api/:path*', (req, res) => {
+  app.all('/api/*', (req, res) => {
+      console.error(`API 404: ${req.method} ${req.url}`);
       res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
   });
 

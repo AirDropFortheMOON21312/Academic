@@ -210,30 +210,22 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onFileSelect, isProcessing, err
         </div>
 
         {/* RIGHT: Staging Area */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 flex flex-col h-full min-h-[300px] shadow-sm">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex justify-between items-center">
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 flex flex-col h-full min-h-[300px] shadow-sm relative overflow-hidden">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex justify-between items-center shrink-0">
                 <span>Selected ({stagedFiles.length})</span>
                 {stagedFiles.length > 0 && (
                     <button onClick={() => setStagedFiles([])} className="text-xs text-red-500 hover:underline">Clear All</button>
                 )}
             </h3>
 
-            <button 
-                onClick={processStagedFiles}
-                disabled={stagedFiles.length === 0 || isProcessing}
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
-            >
-                {isProcessing ? <span className="animate-pulse">Analyzing...</span> : <>Start Analysis <Plus className="w-4 h-4" /></>}
-            </button>
-
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 mb-4 -mx-2 px-2">
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 mb-4 -mx-2 px-2 max-h-[400px]">
                 <AnimatePresence>
                 {stagedFiles.length === 0 ? (
                     <motion.div 
                         initial={{ opacity: 0 }} 
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="h-full flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-xl"
+                        className="h-48 flex flex-col items-center justify-center text-slate-300 border-2 border-dashed border-slate-100 rounded-xl"
                     >
                         <Files className="w-8 h-8 mb-2 opacity-50" />
                         <span className="text-xs font-medium">No files selected</span>
@@ -267,8 +259,16 @@ const UploadZone: React.FC<UploadZoneProps> = ({ onFileSelect, isProcessing, err
                 </AnimatePresence>
             </div>
 
+            <button 
+                onClick={processStagedFiles}
+                disabled={stagedFiles.length === 0 || isProcessing}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-2 mb-4 shrink-0 sticky bottom-0 z-10"
+            >
+                {isProcessing ? <span className="animate-pulse">Analyzing...</span> : <>Start Analysis <Plus className="w-4 h-4" /></>}
+            </button>
+
             {/* Translate Toggle */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4 flex items-center justify-between mt-auto">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between mt-auto shrink-0">
                 <div className="flex items-center gap-3">
                     <Languages className="w-5 h-5 text-indigo-500" />
                     <div className="flex flex-col">
