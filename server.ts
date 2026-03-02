@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import fs from "fs";
 import path from "path";
 import bcrypt from "bcryptjs";
@@ -53,7 +53,14 @@ For each page, generate a string using the structure above.
 `;
 
 const DEFAULT_MODEL = 'gemini-3.1-pro-preview';
-const FALLBACK_MODEL = 'gemini-3-flash-preview';
+// Verified against API — these are the actual available model IDs for this key
+const MODEL_CASCADE = [
+  'gemini-3.1-pro-preview',  // Best quality
+  'gemini-3-flash-preview',  // Fast + capable
+  'gemini-2.5-pro',          // Great quality, stable
+  'gemini-2.5-flash',        // Fast & reliable
+  'gemini-2.0-flash',        // Solid fallback
+];
 
 interface FilePayload {
   type: 'image' | 'pdf' | 'text';
@@ -199,20 +206,12 @@ app.post("/api/process-chunk", async (req, res) => {
       return res.status(400).json({ error: "Invalid files payload" });
     }
 
-    let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (!apiKey) {
-      // Try to get from request header if not in env (for flexibility)
-      apiKey = req.headers['x-api-key'] as string;
-    }
-    
-    // Fallback to user-provided key if still missing (for this session)
-    if (!apiKey) {
-        apiKey = "AIzaSyCDAMtoMGVOvEV0Xl5RK0rSJ23L7-V6_7U";
-        console.log("Using fallback API key");
-    }
+    // User's custom key (from Settings) takes priority, then fall back to server env key
+    const userKey = (req.headers['x-api-key'] as string || '').trim();
+    const apiKey = userKey || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Server API Key missing" });
+      return res.status(500).json({ error: "No API key configured. Add GEMINI_API_KEY to .env or enter your own key in Settings." });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -246,135 +245,138 @@ app.post("/api/process-chunk", async (req, res) => {
       Generate JSON now.`,
     });
 
-    let currentModel = initialModelName;
-    let isFallback = false;
+    // Always try ALL models — preferred model first, then the rest of the cascade.
+    // Never slice: a user pref stored from an old session could start mid-cascade
+    // and skip reliable fallbacks like gemini-1.5-flash.
+    const cascade = MODEL_CASCADE.includes(initialModelName)
+      ? [initialModelName, ...MODEL_CASCADE.filter(m => m !== initialModelName)]
+      : [initialModelName, ...MODEL_CASCADE];
 
-    // Configure thinking
-    const getThinkingConfig = (model: string) => {
-        if (model.includes('pro') && !model.includes('flash') && !isFallback) {
-            return { thinkingLevel: ThinkingLevel.HIGH };
-        }
-        return undefined;
-    };
-
-    const config: any = {
-      systemInstruction: systemInstruction,
-      responseMimeType: "application/json",
-      thinkingConfig: getThinkingConfig(currentModel),
-      safetySettings: [
-        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-      ],
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          summary: { type: Type.STRING, description: "High-level summary of these specific pages." },
-          detailedPageNotes: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: `Markdown notes following the 'Sequential Study Architect' format: Main Topic, Concept Matrix, Deep Dive, Active Recall Suite. MUST have ${files.length} items.`
-          },
-          conceptMap: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-          },
-          quiz: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                answer: { type: Type.STRING },
-                type: { type: Type.STRING, enum: ["multiple", "open"] },
-              },
-              required: ["question", "answer", "type"],
-            },
-          },
-          feynmanExplanation: { type: Type.STRING, description: "One complex topic simplified." },
-          flashcards: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                front: { type: Type.STRING },
-                back: { type: Type.STRING },
-              },
-              required: ["front", "back"],
-            },
-          },
-          audioScript: { type: Type.STRING },
-          confidence: {
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        summary: { type: Type.STRING, description: "High-level summary of these specific pages." },
+        detailedPageNotes: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+          description: `Markdown notes: Main Topic, Key Definitions, Structured Notes, High-Yield Summary. MUST have ${files.length} items.`
+        },
+        conceptMap: { type: Type.ARRAY, items: { type: Type.STRING } },
+        quiz: {
+          type: Type.ARRAY,
+          items: {
             type: Type.OBJECT,
             properties: {
-              score: { type: Type.NUMBER },
-              reasoning: { type: Type.STRING },
+              question: { type: Type.STRING },
+              answer: { type: Type.STRING },
+              type: { type: Type.STRING, enum: ["multiple", "open"] },
             },
-            required: ["score", "reasoning"],
+            required: ["question", "answer", "type"],
           },
         },
-        required: ["detailedPageNotes", "conceptMap", "quiz", "flashcards", "confidence"],
+        feynmanExplanation: { type: Type.STRING, description: "One complex topic simplified." },
+        flashcards: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              front: { type: Type.STRING },
+              back: { type: Type.STRING },
+            },
+            required: ["front", "back"],
+          },
+        },
+        audioScript: { type: Type.STRING },
+        confidence: {
+          type: Type.OBJECT,
+          properties: {
+            score: { type: Type.NUMBER },
+            reasoning: { type: Type.STRING },
+          },
+          required: ["score", "reasoning"],
+        },
       },
+      required: ["detailedPageNotes", "conceptMap", "quiz", "flashcards", "confidence"],
     };
 
-    let retries = 0;
-    const MAX_RETRIES = 3;
+    const safetySettings = [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+    ];
+
     let success = false;
     let result = null;
+    let lastError = 'Unknown error';
 
-    while (!success && retries < MAX_RETRIES) {
-      try {
-        // Update thinking config based on current model state
-        if (config.thinkingConfig && (isFallback || !currentModel.includes('pro'))) {
-            delete config.thinkingConfig;
+    for (let mi = 0; mi < cascade.length && !success; mi++) {
+      const currentModel = cascade[mi];
+
+      const config: any = {
+        systemInstruction,
+        responseMimeType: "application/json",
+        safetySettings,
+        responseSchema,
+      };
+
+      const MAX_RETRIES_PER_MODEL = 2;
+      for (let attempt = 0; attempt < MAX_RETRIES_PER_MODEL && !success; attempt++) {
+        try {
+          console.log(`[Model ${mi + 1}/${cascade.length}] Attempt ${attempt + 1}: ${currentModel}`);
+
+          const response = await ai.models.generateContent({
+            model: currentModel,
+            contents: { parts: parts },
+            config,
+          });
+
+          let text = response.text;
+          if (!text) throw new Error("Empty response from AI");
+
+          text = text.trim();
+          if (text.startsWith('```json')) text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          else if (text.startsWith('```')) text = text.replace(/^```\s*/, '').replace(/\s*```$/, '');
+
+          result = JSON.parse(text);
+          success = true;
+          console.log(`✅ Success with model: ${currentModel}`);
+
+        } catch (e: any) {
+          const errorMsg = (e.message || JSON.stringify(e)).toLowerCase();
+          const status = e.status || (e.response?.status) || null;
+          lastError = e.message || 'Unknown error';
+
+          console.warn(`❌ [${currentModel}] attempt ${attempt + 1} failed (status=${status}): ${errorMsg.substring(0, 120)}`);
+
+          // Only hard-stop on a genuine authentication failure (invalid key, not model access)
+          const isRealAuthError = (status === 401) ||
+            (errorMsg.includes('api key not valid') || errorMsg.includes('invalid api key'));
+          if (isRealAuthError) {
+            return res.status(403).json({ error: "API Key is invalid. Please check your key in Settings." });
+          }
+
+          // Rate-limited: wait and retry same model
+          if (status === 429 || errorMsg.includes('quota') || errorMsg.includes('rate limit')) {
+            const waitMs = 3000 * (attempt + 1);
+            console.log(`⏳ Rate limited on ${currentModel}, waiting ${waitMs}ms before retry...`);
+            await delay(waitMs);
+            continue; // retry same model
+          }
+
+          // Any other error (model not found, 403 access, 500, timeout): break to next model
+          console.log(`➡️ Moving to next model in cascade...`);
+          await delay(1000);
+          break;
         }
-
-        const response = await ai.models.generateContent({
-          model: currentModel, 
-          contents: { parts: parts },
-          config: config
-        });
-
-        let text = response.text;
-        if (!text) throw new Error("Empty response from AI");
-
-        // Clean JSON formatting issues common with some models
-        text = text.trim();
-        if (text.startsWith('```json')) text = text.replace(/^```json/, '').replace(/```$/, '');
-        else if (text.startsWith('```')) text = text.replace(/^```/, '').replace(/```$/, '');
-
-        result = JSON.parse(text);
-        success = true;
-      } catch (e: any) {
-        const errorMsg = (e.message || JSON.stringify(e)).toLowerCase();
-        const status = e.status || (e.response ? e.response.status : null);
-        
-        console.warn(`Retry (${retries+1}) with ${currentModel}:`, errorMsg);
-        
-        if (status === 403 || errorMsg.includes('key')) {
-           return res.status(403).json({ error: "API Key Invalid or Access Denied." });
-        }
-
-        // Fallback to standard flash on exhaustion or timeout
-        if ((status === 429 || status === 503 || errorMsg.includes('quota') || errorMsg.includes('timeout') || errorMsg.includes('overloaded')) && !isFallback) {
-            console.log(`Switching to fallback model: ${FALLBACK_MODEL}`);
-            currentModel = FALLBACK_MODEL;
-            isFallback = true;
-            await delay(2000);
-            continue;
-        }
-
-        retries++;
-        await delay(1000 * Math.pow(2, retries)); // Exponential backoff
       }
     }
 
     if (!success || !result) {
-        return res.status(500).json({ 
-            error: "Failed to process chunk after retries.", 
-            details: `Last model attempted: ${currentModel}` 
-        });
+      return res.status(500).json({
+        error: `Analysis failed across all ${cascade.length} models. Please try again later.`,
+        details: `Last error: ${lastError}. Models tried: ${cascade.join(', ')}`,
+      });
     }
 
     res.json(result);
@@ -393,15 +395,15 @@ app.post("/api/generate-image", async (req, res) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || (req.headers['x-api-key'] as string);
+    const userKey2 = (req.headers['x-api-key'] as string || '').trim();
+    const apiKey = userKey2 || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Server API Key missing" });
+      return res.status(500).json({ error: "No API key configured. Add GEMINI_API_KEY to .env or enter your own key in Settings." });
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    
-    // Using gemini-3.1-flash-image-preview as requested
+
     const response = await ai.models.generateContent({
       model: "gemini-3.1-flash-image-preview",
       contents: { parts: [{ text: prompt }] },
@@ -448,7 +450,7 @@ async function startServer() {
   }
 
   // Add explicit 404 for API routes to prevent falling through to Vite
-  app.all('/api/*', (req, res) => {
+  app.all('/api/*path', (req, res) => {
       console.error(`API 404: ${req.method} ${req.url}`);
       res.status(404).json({ error: `API route not found: ${req.method} ${req.url}` });
   });

@@ -3,8 +3,8 @@ import mammoth from 'mammoth';
 import type { FilePayload } from './geminiService';
 
 // Set worker source to CDN to avoid build issues
-const pdfjsVersion = pdfjsLib.version || '3.11.174';
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsVersion}/pdf.worker.min.js`;
+const pdfjsVersion = pdfjsLib.version || '5.4.624';
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsVersion}/build/pdf.worker.min.mjs`;
 
 export const processFile = async (file: File): Promise<FilePayload> => {
   const fileType = file.type;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StudyGuide, TabId, Unit } from './types';
 import { generateStudyGuide } from './services/geminiService';
 import type { FilePayload } from './services/geminiService';
+import { formatFactory, type FormatType } from './services/formatters/formatFactory';
 import Sidebar, { TABS } from './components/Sidebar';
 import UploadZone from './components/UploadZone';
 import QuizSection from './components/QuizSection';
@@ -19,6 +20,7 @@ import { processFile } from './services/fileProcessor';
 import LoginModal from './components/LoginModal';
 import { getUser, logout } from './services/auth';
 import ImageGenerator from './components/ImageGenerator';
+import FormatSelector from './components/FormatSelector';
 import { 
   BookOpen, 
   Lightbulb, 
@@ -185,9 +187,11 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void; onClearDat
                     onChange={(e) => setModel(e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-slate-800 appearance-none text-base font-medium"
                 >
-                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Recommended - High Quality)</option>
-                    <option value="gemini-3-flash-preview">Gemini 3.0 Flash (Balanced)</option>
-                    <option value="gemini-2.5-flash-lite-latest">Gemini 2.5 Flash Lite (Fastest)</option>
+                    <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Best Quality)</option>
+                    <option value="gemini-3-flash-preview">Gemini 3.0 Flash (Fast)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (Balanced)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fastest)</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Stable)</option>
                 </select>
                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                     <Cpu className="w-5 h-5" />
@@ -329,6 +333,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<any>(getUser());
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<FormatType>('markdown');
   
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const pendingFilesRef = useRef<File[]>([]); // Store files for retry
@@ -633,6 +638,12 @@ const App: React.FC = () => {
             <ContentContainer>
               <div className="space-y-8 animate-fade-in max-w-5xl mx-auto">
                 <SearchBar activeTab={activeTab} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+                {!searchQuery && (
+                  <FormatSelector
+                    selectedFormat={selectedFormat}
+                    onFormatChange={setSelectedFormat}
+                  />
+                )}
                 {!searchQuery && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-6">

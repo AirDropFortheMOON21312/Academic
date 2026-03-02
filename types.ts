@@ -43,3 +43,9 @@ export interface TabConfig {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
+
+export interface FormattedResponse {
+  content?: string;
+  data?: object;
+  html?: string;
+}

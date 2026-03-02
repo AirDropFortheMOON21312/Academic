@@ -7,7 +7,7 @@ export interface FilePayload {
 }
 
 const CHUNK_SIZE = 3; // Reduced chunk size for reliability with Pro models
-const DEFAULT_MODEL = 'gemini-3.1-pro-preview'; 
+const DEFAULT_MODEL = 'gemini-3.1-pro-preview';
 
 interface ChunkData {
   index: number;
