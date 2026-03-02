@@ -335,6 +335,14 @@ const App: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Check server connection
+    fetch('/api/test')
+      .then(res => {
+        if (res.ok) console.log("Server connected");
+        else console.error("Server connection failed:", res.status);
+      })
+      .catch(err => console.error("Server unreachable:", err));
+
     if (!isLoading) {
       scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }

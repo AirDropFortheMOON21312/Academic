@@ -16,6 +16,15 @@ const JWT_SECRET = process.env.JWT_SECRET || "secret-key-change-me";
 
 // --- Constants & Configuration ---
 
+// Increase limit to 100mb for large PDFs
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
+// Debug route to confirm server is running and reachable
+app.get('/api/test', (req, res) => {
+  res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 const BASE_SYSTEM_INSTRUCTION = `
 Role: Act as a strict, expert academic information extractor. The user will provide educational text or images. Your ONLY source of truth is the exact material provided. You must not invent information, and you must not include outside general knowledge unless absolutely necessary to briefly clarify a highly ambiguous term present in the text.
 
